@@ -20,12 +20,22 @@ import com.example.fotogram.ui.theme.FotogramTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 1. Controlliamo se c'è una sessione salvata
+        val sessionManager = SessionManager(this)
+        val sessionToken = sessionManager.fetchSession()
+
+        // 2. Se il token è null, deve fare Login. Se c'è, va al Feed.
+        val startScreen = if (sessionToken == null) "Login" else "Feed"
+
         enableEdgeToEdge()
         setContent {
             FotogramTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    // 3. Passiamo la schermata iniziale al navigatore
                     ScreenNavigator(
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding),
+                        startDestination = startScreen
                     )
                 }
             }

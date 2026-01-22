@@ -19,6 +19,64 @@ import com.example.fotogram.navigator.feedScreen.*
 import com.example.fotogram.navigator.friendProfile.*
 import com.example.fotogram.navigator.newPostScreen.*
 import com.example.fotogram.navigator.profileScreen.*
+import com.example.fotogram.navigator.loginScreen.LoginScreen
+
+
+@Composable
+fun ScreenNavigator(modifier : Modifier = Modifier, startDestination: String) { // Ricordati startDestination aggiunto prima
+
+    var screen by remember { mutableStateOf(startDestination) }
+    var tab by remember { mutableStateOf( "Feed" ) }
+
+    fun changeScreen(nextScreen : String) {
+        screen = nextScreen
+    }
+
+    fun changeTab(nextTab : String) {
+        tab = nextTab
+    }
+
+    when (screen) {
+        "Login" -> LoginScreen(modifier = modifier, onChangeScreen = { changeScreen(it) })
+
+        // CORREZIONE QUI SOTTO: Invece di ::changeTab usa { changeTab(it) }
+        "Feed" -> Feed(
+            modifier = modifier,
+            onChangeScreen = { changeScreen(it) },
+            onChangeTab = { changeTab(it) }
+        )
+
+        "Profile" -> Profile(
+            modifier = modifier,
+            onChangeScreen = { changeScreen(it) },
+            onChangeTab = { changeTab(it) }
+        )
+
+        "NewPost" -> NewPost(
+            modifier = modifier,
+            onChangeScreen = { changeScreen(it) },
+            onChangeTab = { changeTab(it) }
+        )
+
+        "FriendProfile" -> FriendProfile(
+            modifier = modifier,
+            onChangeScreen = { changeScreen(it) }
+        )
+
+        "EditProfile" -> EditProfile(
+            modifier = modifier,
+            onChangeScreen = { changeScreen(it) }
+        )
+
+        "DetailsPost" -> DetailsPost(
+            modifier = modifier,
+            onChangeScreen = { changeScreen(it) },
+            tab = tab
+        )
+
+        else -> Log.d("MyApp", "Schermata sbagliata")
+    }
+}
 
 @Composable
 fun ScreenNavigator(modifier : Modifier = Modifier) {
