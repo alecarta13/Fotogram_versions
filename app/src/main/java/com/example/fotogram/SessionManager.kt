@@ -8,24 +8,29 @@ class SessionManager(context: Context) {
 
     companion object {
         const val USER_TOKEN = "user_token"
+        const val USER_ID = "user_id" // <--- NUOVO
     }
 
-    // Salva il token
-    fun saveSession(token: String) {
+    fun saveSession(token: String, userId: Int) { // <--- MODIFICATA
         val editor = prefs.edit()
         editor.putString(USER_TOKEN, token)
+        editor.putInt(USER_ID, userId) // <--- SALVIAMO L'ID
         editor.apply()
     }
 
-    // Legge il token (torna null se non c'è)
     fun fetchSession(): String? {
         return prefs.getString(USER_TOKEN, null)
     }
 
-    // Cancella il token (Logout)
+    // NUOVA FUNZIONE
+    fun fetchUserId(): Int {
+        return prefs.getInt(USER_ID, -1) // Ritorna -1 se non trovato
+    }
+
     fun clearSession() {
         val editor = prefs.edit()
         editor.remove(USER_TOKEN)
+        editor.remove(USER_ID) // <--- PULIAMO ANCHE L'ID
         editor.apply()
     }
 }

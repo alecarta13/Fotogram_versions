@@ -68,14 +68,14 @@ fun LoginScreen(
                                 val response = RetrofitClient.api.registerUser(request)
 
                                 if (response.isSuccessful && response.body() != null) {
-                                    // 3. SUCCESSO!
                                     val token = response.body()!!.sessionId
                                     val id = response.body()!!.userId
 
                                     Log.d("LOGIN", "Registrato! Token: $token - ID: $id")
 
-                                    // 4. Salvo e cambio schermata
-                                    sessionManager.saveSession(token)
+                                    // MODIFICA QUESTA RIGA: Passa anche 'id'
+                                    sessionManager.saveSession(token, id)
+
                                     onChangeScreen("Feed")
                                 } else {
                                     // ERRORE DEL SERVER (es. nome duplicato o dati sbagliati)

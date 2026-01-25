@@ -1,25 +1,28 @@
 package com.example.fotogram.navigator.profileScreen
 
-import android.util.Log
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.fotogram.ScreenPlaceholder
 import com.example.fotogram.SessionManager
 import com.example.fotogram.navigator.NavigationBar
-import com.example.fotogram.navigator.Post
-import com.example.fotogram.navigator.PostDataClass
 
 @Composable
 fun Profile(
@@ -27,50 +30,73 @@ fun Profile(
     onChangeScreen: (String) -> Unit,
     onChangeTab: (String) -> Unit
 ) {
-    // 1. Otteniamo il contesto e inizializziamo il SessionManager
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
+    val viewModel: ProfileViewModel = viewModel()
 
-    Column {
-        ScreenPlaceholder("Profilo", modifier = modifier.weight(1f), Color.Cyan)
+    val posts by viewModel.posts.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
-        // Link Modifica Profilo
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-                .clickable{
-                    Log.d("Feed", "Da Feed a EditProfile" )
-                    onChangeScreen("EditProfile")
-                }
-        ){
-            Text(
-                text = "Clicca qui per modificare il profilo",
-                modifier = Modifier.align(Alignment.Center),
-            )
+    // Carichiamo i dati all'avvio
+    LaunchedEffect(Unit) {
+        val token = sessionManager.fetchSession()
+        val myUserId = sessionManager.fetchUserId()
+
+        if (token != null && myUserId != -1) {
+            viewModel.loadUserPosts(token, myUserId)
         }
+    }
 
-        // --- TASTO LOGOUT (NUOVO) ---
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            Button(
-                onClick = {
-                    // 1. Cancella il token dalla memoria
-                    sessionManager.clearSession()
-                    // 2. Torna alla schermata di Login
-                    onChangeScreen("Login")
-                },
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Text("Logout (Reset Sessione)")
+    Column(modifier = modifier.fillMaxSize()) {
+        ScreenPlaceholder("Il Mio Profilo", modifier = Modifier.height(50.dp), Color.Blue)
+
+        // TASTO LOGOUT
+        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.CenterEnd) {
+            Button(onClick = {
+                sessionManager.clearSession()
+                onChangeScreen("Login")
+            }) {
+                Text("Logout")
             }
         }
-        // -----------------------------
 
-        Post(modifier = Modifier, page = "Profile", msg = "Visualizza mio post", postData = PostDataClass.Utente1, onChangeScreen = onChangeScreen, )
+        // GRIGLIA FOTO
+        Box(modifier = Modifier.weight(1f)) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else if (posts.isEmpty()) {
+                Text("Non hai ancora pubblicato nulla.", Modifier.align(Alignment.Center))
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2), // 2 Colonne
+                    contentPadding = PaddingValues(4.dp)
+                ) {
+                    items(posts) { post ->
+                        if (post.contentPicture != null) {
+                            val bitmap = remember(post.contentPicture) {
+                                try {
+                                    val bytes = Base64.decode(post.contentPicture, Base64.DEFAULT)
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                } catch (e: Exception) { null }
+                            }
 
-        NavigationBar( modifier = modifier, page = "Profile", onChangeScreen = onChangeScreen, onChangeTab = onChangeTab)
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .padding(4.dp)
+                                        .aspectRatio(1f) // Quadrato
+                                        .border(1.dp, Color.LightGray),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        NavigationBar(modifier = Modifier, page = "Profile", onChangeScreen = onChangeScreen, onChangeTab = onChangeTab)
     }
 }
