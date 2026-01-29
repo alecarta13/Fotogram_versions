@@ -1,167 +1,112 @@
 package com.example.fotogram.navigator
 
-import android.util.Log
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import com.example.fotogram.navigator.feedScreen.*
-import com.example.fotogram.navigator.friendProfile.*
-import com.example.fotogram.navigator.newPostScreen.*
-import com.example.fotogram.navigator.profileScreen.*
 import com.example.fotogram.navigator.loginScreen.LoginScreen
-
-
-@Composable
-fun ScreenNavigator(modifier : Modifier = Modifier, startDestination: String) { // Ricordati startDestination aggiunto prima
-
-    var screen by remember { mutableStateOf(startDestination) }
-    var tab by remember { mutableStateOf( "Feed" ) }
-
-    fun changeScreen(nextScreen : String) {
-        screen = nextScreen
-    }
-
-    fun changeTab(nextTab : String) {
-        tab = nextTab
-    }
-
-    when (screen) {
-        "Login" -> LoginScreen(modifier = modifier, onChangeScreen = { changeScreen(it) })
-
-        // CORREZIONE QUI SOTTO: Invece di ::changeTab usa { changeTab(it) }
-        "Feed" -> Feed(
-            modifier = modifier,
-            onChangeScreen = { changeScreen(it) },
-            onChangeTab = { changeTab(it) }
-        )
-
-        "Profile" -> Profile(
-            modifier = modifier,
-            onChangeScreen = { changeScreen(it) },
-            onChangeTab = { changeTab(it) }
-        )
-
-        "NewPost" -> NewPost(
-            modifier = modifier,
-            onChangeScreen = { changeScreen(it) },
-            onChangeTab = { changeTab(it) }
-        )
-
-        "FriendProfile" -> FriendProfile(
-            modifier = modifier,
-            onChangeScreen = { changeScreen(it) }
-        )
-
-        "EditProfile" -> EditProfile(
-            modifier = modifier,
-            onChangeScreen = { changeScreen(it) }
-        )
-
-        "DetailsPost" -> DetailsPost(
-            modifier = modifier,
-            onChangeScreen = { changeScreen(it) },
-            tab = tab
-        )
-
-        else -> Log.d("MyApp", "Schermata sbagliata")
-    }
-}
+import com.example.fotogram.navigator.feedScreen.FeedScreen
+import com.example.fotogram.navigator.newPostScreen.NewPost
+import com.example.fotogram.navigator.profileScreen.Profile
+import com.example.fotogram.navigator.profileScreen.EditProfile
+import com.example.fotogram.navigator.friendProfile.FriendProfile
+import com.example.fotogram.navigator.detailPostScreen.DetailsPostScreen
 
 @Composable
-fun ScreenNavigator(modifier : Modifier = Modifier) {
-
-    var screen by remember { mutableStateOf( "Feed" ) }
-    var tab by remember { mutableStateOf( "Feed" ) }
-
-    fun changeScreen(nextScreen : String) {
-        screen = nextScreen
-    }
-
-    fun changeTab(nextTab : String) {
-        tab = nextTab
-    }
-
-    when (screen) {
-        "Feed" -> Feed(modifier = modifier, onChangeScreen = ::changeScreen, onChangeTab = ::changeTab)
-        "Profile" -> Profile(modifier = modifier, onChangeScreen = ::changeScreen, onChangeTab = ::changeTab)
-        "NewPost" -> NewPost(modifier = modifier, onChangeScreen = ::changeScreen, onChangeTab = ::changeTab)
-        "FriendProfile" -> FriendProfile(modifier = modifier, onChangeScreen = ::changeScreen)
-        "EditProfile" -> EditProfile(modifier = modifier, onChangeScreen = ::changeScreen)
-        "DetailsPost" -> DetailsPost(modifier = modifier, onChangeScreen = ::changeScreen, tab = tab)
-        else -> Log.d("MyApp", "Schermata sbagliata")
-    }
-
-}
-
-@Composable
-fun NavigationBar(
+fun ScreenNavigator(
     modifier: Modifier = Modifier,
-    page: String,
-    onChangeScreen: (String) -> Unit,
-    onChangeTab: (String) -> Unit ){
-    Row {
-        Button(
-            onClick = {
-                Log.d("$page", "Da $page a NewPost")
-                onChangeScreen("NewPost")
-                onChangeTab("NewPost")
-            }
-        ) {
-            Text(
-                text = "NewPost",
-            )
-        }
-        Button(
-            onClick = {
-                Log.d("$page", "Da $page a Feed")
-                onChangeScreen("Feed")
-                onChangeTab("Feed")
-            }
-        ) {
-            Text(
-                text = "Feed",
-            )
-        }
-        Button(
-            onClick = {
-                Log.d("$page", "Da $page a Profile")
-                onChangeScreen("Profile")
-                onChangeTab("Profile")
-            }
-        ) {
-            Text(
-                text = "Profile",
-            )
-        }
-    }
-}
+    startDestination: String
+) {
+    var currentScreen by remember { mutableStateOf(startDestination) }
 
-@Composable
-fun GoBack(modifier : Modifier = Modifier, page: String, goToPage : String, onChangeScreen: (String) -> Unit){
-    Box(
-        modifier = modifier
-            .clickable{
-                Log.d("$page", "Da $page a $goToPage" )
-                onChangeScreen(goToPage)
-            }
-            .background(color = Color.Gray)
-    ){
-        Text(
-            text = "Torna indietro",
-            modifier = modifier.align(Alignment.CenterStart),
-            color = Color.White
-        )
-    }
+    // VARIABILI DI STATO
+    var selectedUserId by remember { mutableStateOf(-1) }
+    var selectedPostId by remember { mutableStateOf(-1) }
 
+    // previousScreen: serve per i DettagliPost (per sapere se tornare a Feed, Profile o FriendProfile)
+    var previousScreen by remember { mutableStateOf("Feed") }
+
+    // NUOVA VARIABILE: Serve per ricordare da dove siamo entrati nel profilo amico (es. dal Feed)
+    var friendOrigin by remember { mutableStateOf("Feed") }
+
+    when (currentScreen) {
+        "Login" -> {
+            LoginScreen(modifier = modifier, onChangeScreen = { currentScreen = it })
+        }
+
+        "Feed" -> {
+            FeedScreen(
+                modifier = modifier,
+                onChangeScreen = { dest -> currentScreen = dest },
+                onChangeTab = { tab -> currentScreen = tab },
+
+                // QUANDO CLICCO UN UTENTE DAL FEED
+                onUserClick = { userId ->
+                    selectedUserId = userId
+                    friendOrigin = "Feed" // <--- 1. Memorizzo che vengo dal Feed
+                    currentScreen = "FriendProfile"
+                },
+
+                onPostClick = { postId ->
+                    selectedPostId = postId
+                    previousScreen = "Feed"
+                    currentScreen = "DetailsPost"
+                }
+            )
+        }
+
+        "NewPost" -> {
+            NewPost(
+                modifier = modifier,
+                onChangeScreen = { dest -> currentScreen = dest },
+                onChangeTab = { tab -> currentScreen = tab }
+            )
+        }
+
+        "Profile" -> {
+            Profile(
+                modifier = modifier,
+                onChangeScreen = { dest -> currentScreen = dest },
+                onChangeTab = { tab -> currentScreen = tab },
+                onPostClick = { postId ->
+                    selectedPostId = postId
+                    previousScreen = "Profile"
+                    currentScreen = "DetailsPost"
+                }
+            )
+        }
+
+        "FriendProfile" -> {
+            FriendProfile(
+                modifier = modifier,
+                userId = selectedUserId,
+                onChangeScreen = { currentScreen = it },
+
+                // <--- 2. USO LA MEMORIA SICURA
+                // Invece di 'previousScreen' (che cambia), uso 'friendOrigin' che è fisso
+                onBack = { currentScreen = friendOrigin },
+
+                // Gestione click sul post dell'amico
+                onPostClick = { postId ->
+                    selectedPostId = postId
+                    previousScreen = "FriendProfile" // Dico al post di tornare qui
+                    currentScreen = "DetailsPost"
+                }
+            )
+        }
+
+        "DetailsPost" -> {
+            DetailsPostScreen(
+                modifier = modifier,
+                postId = selectedPostId,
+                onChangeScreen = { currentScreen = it },
+                tab = previousScreen, // Torna al padre corretto (Feed, Profile o FriendProfile)
+                onChangeTab = { tab -> currentScreen = tab }
+            )
+        }
+
+        "EditProfile" -> {
+            EditProfile(modifier = modifier, onChangeScreen = { currentScreen = it })
+        }
+
+        else -> LoginScreen(modifier = modifier, onChangeScreen = { currentScreen = it })
+    }
 }
