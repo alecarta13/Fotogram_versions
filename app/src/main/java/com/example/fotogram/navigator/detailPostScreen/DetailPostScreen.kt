@@ -5,6 +5,9 @@ import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fotogram.SessionManager
@@ -25,16 +27,15 @@ import com.example.fotogram.navigator.NavigationBar
 @Composable
 fun DetailsPostScreen(
     modifier: Modifier = Modifier,
-    postId: Int, // L'ID del post da mostrare
+    postId: Int,
     onChangeScreen: (String) -> Unit,
-    tab: String, // "Feed" o "Profile" o "FriendProfile"
+    tab: String,
     onChangeTab: (String) -> Unit
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
     var post by remember { mutableStateOf<PostDetail?>(null) }
 
-    // Scarichiamo i dettagli del singolo post
     LaunchedEffect(postId) {
         val token = sessionManager.fetchSession()
         if (token != null) {
@@ -47,28 +48,48 @@ fun DetailsPostScreen(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(Color.White)) {
-        // LOGICA DI NAVIGAZIONE CORRETTA
-        // Se vengo dal Feed -> Torno al Feed
-        // Se vengo dal Profilo -> Torno al Profilo
-        val destination = when(tab) {
-            "Feed" -> "Feed"
-            "Profile" -> "Profile"
-            "FriendProfile" -> "FriendProfile" // Ora gestiamo anche questo caso
-            else -> "Feed"
+    val destination = when(tab) {
+        "Feed" -> "Feed"
+        "Profile" -> "Profile"
+        "FriendProfile" -> "FriendProfile"
+        else -> "Feed"
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            GoBack(
+                modifier = Modifier.statusBarsPadding(),
+                page = "Dettaglio Post",
+                goToPage = destination,
+                onChangeScreen = onChangeScreen
+            )
+        },
+        bottomBar = {
+            NavigationBar(
+                modifier = Modifier.fillMaxWidth(),
+                page = "DetailsPost",
+                onChangeScreen = onChangeScreen,
+                onChangeTab = onChangeTab
+            )
         }
+    ) { innerPadding ->
 
-        GoBack(
-            modifier = Modifier,
-            page = "Dettaglio Post",
-            goToPage = destination,
-            onChangeScreen = onChangeScreen
-        )
-
-        // CONTENUTO DEL POST
-        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = modifier // <--- Il modifier esterno lo applichiamo QUI al contenuto
+                .padding(innerPadding)
+                .fillMaxSize()
+                .background(Color.White),
+            contentAlignment = Alignment.Center
+        ) {
             if (post != null) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top // Meglio Top se l'immagine è grande
+                ) {
                     // Immagine
                     if (post!!.contentPicture != null) {
                         val bitmap = remember(post!!.contentPicture) {
@@ -83,7 +104,7 @@ fun DetailsPostScreen(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .aspectRatio(1f), // Quadrata
+                                    .aspectRatio(1f),
                                 contentScale = ContentScale.Crop
                             )
                         }
@@ -93,7 +114,7 @@ fun DetailsPostScreen(
 
                     // Descrizione
                     Text(
-                        text = post!!.contentText ?: "",
+                        text = post?.contentText ?: "",
                         fontSize = 18.sp,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -102,7 +123,5 @@ fun DetailsPostScreen(
                 Text("Caricamento post...")
             }
         }
-
-        NavigationBar(modifier = Modifier, page = "DetailsPost", onChangeScreen = onChangeScreen, onChangeTab = onChangeTab)
     }
 }

@@ -2,6 +2,7 @@ package com.example.fotogram.api
 
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -49,4 +50,16 @@ interface FotogramApi {
         @Path("authorId") userId: Int,
         @Header("x-session-id") sessionId: String
     ): Response<List<Int>>
+
+
+    @PUT("users/{id}/follow")
+    suspend fun followUser(@Path("id") id: Int, @Header("x-session-id") sessionId: String): Response<User>
+
+    @DELETE("users/{id}/follow")
+    suspend fun unfollowUser(@Path("id") id: Int, @Header("x-session-id") sessionId: String): Response<User> // A volte ritorna Void o User
+
+    // Spesso c'è una chiamata per vedere chi segui, es:
+    @GET("users/{id}/followed")
+    suspend fun getFollowed(@Path("id") id: Int, @Header("x-session-id") sessionId: String): Response<List<User>>
 }
+

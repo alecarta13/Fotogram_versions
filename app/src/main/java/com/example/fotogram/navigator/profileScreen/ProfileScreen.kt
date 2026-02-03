@@ -5,7 +5,7 @@ import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable // <--- Importante: serve per il click
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -13,10 +13,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,131 +28,134 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.fotogram.SessionManager
-import com.example.fotogram.api.RetrofitClient
-import com.example.fotogram.api.User
 import com.example.fotogram.navigator.NavigationBar
 
 @Composable
-fun Profile(
+fun ProfileScreen(
     modifier: Modifier = Modifier,
     onChangeScreen: (String) -> Unit,
     onChangeTab: (String) -> Unit,
-    onPostClick: (Int) -> Unit // <--- 1. NUOVO PARAMETRO: Funzione per gestire il click
+    onPostClick: (Int) -> Unit
 ) {
-    val context = LocalContext.current
-    val sessionManager = remember { SessionManager(context) }
     val viewModel: ProfileViewModel = viewModel()
-
-    // STATO PER I MIEI DATI (Nome e Foto)
-    var myUser by remember { mutableStateOf<User?>(null) }
-
-    val posts by viewModel.posts.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
+    val userPosts by viewModel.userPosts.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+    val token = remember { sessionManager.fetchSession() }
+    val userId = remember { sessionManager.fetchUserId() } // Assicurati di avere fetchUserId in SessionManager
+
     LaunchedEffect(Unit) {
-        val token = sessionManager.fetchSession()
-        val myUserId = sessionManager.fetchUserId()
-
-        if (token != null && myUserId != -1) {
-            viewModel.loadUserPosts(token, myUserId)
-
-            try {
-                // Scarica i dati utente (Nome e Foto)
-                val userResponse = RetrofitClient.api.getUser(myUserId, token)
-                if (userResponse.isSuccessful) {
-                    myUser = userResponse.body()
-                }
-            } catch (e: Exception) { }
+        if (token != null && userId != -1) {
+            viewModel.loadUserProfile(userId, token)
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(Color.White)) {
-        // --- HEADER DEL PROFILO ---
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // FOTO PROFILO
-            if (myUser?.profilePicture != null) {
-                val myBitmap = remember(myUser!!.profilePicture) {
-                    try {
-                        val bytes = Base64.decode(myUser!!.profilePicture, Base64.DEFAULT)
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                    } catch (e: Exception) { null }
-                }
-
-                if (myBitmap != null) {
-                    Image(
-                        bitmap = myBitmap,
-                        contentDescription = "Me",
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .border(2.dp, Color.Gray, CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    DefaultProfileIcon()
-                }
-            } else {
-                DefaultProfileIcon()
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // NOME UTENTE
-            Text(
-                text = myUser?.username ?: sessionManager.fetchUserName() ?: "Profilo",
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // STATISTICHE
-            Row(
+    // USARE SCAFFOLD PER IL LAYOUT CORRETTO
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ProfileStat(number = posts.size.toString(), label = "Post")
-                ProfileStat(number = "0", label = "Follower")
-                ProfileStat(number = "0", label = "Seguiti")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // TASTO LOGOUT
-            Button(
-                onClick = {
-                    sessionManager.clearSession()
-                    onChangeScreen("Login")
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Logout")
-            }
+                page = "Profile",
+                onChangeScreen = onChangeScreen,
+                onChangeTab = onChangeTab
+            )
         }
+    ) { innerPadding -> // Padding obbligatorio dello Scaffold
 
-        // --- GRIGLIA FOTO ---
-        Box(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(innerPadding) // Applica il padding qui
+        ) {
+            // --- HEADER DEL PROFILO ---
             if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (posts.isEmpty()) {
-                Text("Nessuna foto pubblicata", Modifier.align(Alignment.Center), color = Color.Gray)
-            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (userProfile != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Immagine Profilo
+                    if (userProfile!!.profilePicture != null) {
+                        val bitmap = remember(userProfile!!.profilePicture) {
+                            try {
+                                val bytes =
+                                    Base64.decode(userProfile!!.profilePicture, Base64.DEFAULT)
+                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = "Profile",
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(CircleShape)
+                                    .border(2.dp, Color.Gray, CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else DefaultProfileIcon()
+                    } else DefaultProfileIcon()
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = userProfile?.username ?: "Utente",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Statistiche (Post, Follower, Seguiti)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        ProfileStat(number = "${userPosts.size}", label = "Post")
+                        ProfileStat(number = "0", label = "Follower") // Dati finti per ora
+                        ProfileStat(number = "0", label = "Seguiti")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Tasto Modifica Profilo
+                    Button(onClick = { onChangeScreen("EditProfile") }) {
+                        Text("Modifica Profilo")
+                    }
+                }
+
+                HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+
+                // --- GRIGLIA DEI POST ---
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    items(posts) { post ->
+                    items(userPosts) { post ->
                         if (post.contentPicture != null) {
                             val bitmap = remember(post.contentPicture) {
                                 try {
                                     val bytes = Base64.decode(post.contentPicture, Base64.DEFAULT)
-                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                                } catch (e: Exception) { null }
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                        ?.asImageBitmap()
+                                } catch (e: Exception) {
+                                    null
+                                }
                             }
 
                             if (bitmap != null) {
@@ -164,7 +165,6 @@ fun Profile(
                                     modifier = Modifier
                                         .aspectRatio(1f)
                                         .background(Color.LightGray)
-                                        // 2. RENDIAMO L'IMMAGINE CLICCABILE
                                         .clickable { onPostClick(post.id) },
                                     contentScale = ContentScale.Crop
                                 )
@@ -172,10 +172,12 @@ fun Profile(
                         }
                     }
                 }
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Errore caricamento profilo")
+                }
             }
         }
-
-        NavigationBar(modifier = Modifier, page = "Profile", onChangeScreen = onChangeScreen, onChangeTab = onChangeTab)
     }
 }
 

@@ -13,9 +13,9 @@ data class UserResponse(
 
 data class PostDetail(
     val id: Int,
-    val authorId: Int,       // Nello screenshot c'è solo authorId, non username
-    val contentText: String?, // Nello screenshot si chiama contentText
-    val contentPicture: String?, // Nello screenshot si chiama contentPicture (Base64)
+    val authorId: Int,
+    val contentText: String?,
+    val contentPicture: String?,
     val createdAt: String?
 )
 

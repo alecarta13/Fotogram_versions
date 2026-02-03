@@ -1,11 +1,11 @@
-package com.example.fotogram.navigator.friendProfile
+package com.example.fotogram.navigator.friendsProfileScreen
 
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable // <--- IMPORTANTE PER IL CLICK
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,8 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.fotogram.SessionManager
-import com.example.fotogram.api.RetrofitClient
-import com.example.fotogram.api.User
 import com.example.fotogram.navigator.profileScreen.ProfileViewModel
 
 @Composable
@@ -38,26 +37,24 @@ fun FriendProfile(
     userId: Int,
     onChangeScreen: (String) -> Unit,
     onBack: () -> Unit,
-    onPostClick: (Int) -> Unit // <--- 1. NUOVO PARAMETRO: Per gestire il click sul post
+    onPostClick: (Int) -> Unit
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
+
+    // Usiamo lo stesso ViewModel del profilo personale
     val viewModel: ProfileViewModel = viewModel()
 
-    val posts by viewModel.posts.collectAsState()
+    // 1. CORREZIONE: Usiamo i nomi nuovi del ViewModel
+    val posts by viewModel.userPosts.collectAsState() // Era .posts
+    val friendUser by viewModel.userProfile.collectAsState() // Ora prendiamo l'utente dal VM
     val isLoading by viewModel.isLoading.collectAsState()
-    var friendUser by remember { mutableStateOf<User?>(null) }
 
     LaunchedEffect(userId) {
         val token = sessionManager.fetchSession()
         if (token != null) {
-            viewModel.loadUserPosts(token, userId)
-            try {
-                val response = RetrofitClient.api.getUser(userId, token)
-                if (response.isSuccessful) {
-                    friendUser = response.body()
-                }
-            } catch (e: Exception) { }
+            // 2. CORREZIONE: Usiamo la funzione unica che scarica tutto (Profilo + Post)
+            viewModel.loadUserProfile(userId, token)
         }
     }
 
@@ -84,24 +81,40 @@ fun FriendProfile(
                     try {
                         val bytes = Base64.decode(friendUser!!.profilePicture, Base64.DEFAULT)
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                    } catch (e: Exception) { null }
+                    } catch (e: Exception) {
+                        null
+                    }
                 }
                 if (avatarBitmap != null) {
                     Image(
                         bitmap = avatarBitmap, contentDescription = null,
-                        modifier = Modifier.size(80.dp).clip(CircleShape).border(1.dp, Color.Gray, CircleShape),
+                        modifier = Modifier.size(80.dp).clip(CircleShape)
+                            .border(1.dp, Color.Gray, CircleShape),
                         contentScale = ContentScale.Crop
                     )
-                } else { DefaultFriendAvatar() }
-            } else { DefaultFriendAvatar() }
+                } else {
+                    DefaultFriendAvatar()
+                }
+            } else {
+                DefaultFriendAvatar()
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = friendUser?.username ?: "Utente #$userId", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+
+            // Nome Utente
+            Text(
+                text = friendUser?.username ?: "Caricamento...",
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Tasto Segui (Disabilitato per ora o da implementare)
             Button(onClick = { /* TODO: Follow */ }) { Text("Segui") }
         }
 
-        Divider()
+        HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
 
         // --- GRIGLIA POST AMICO ---
         Box(modifier = Modifier.weight(1f)) {
@@ -121,8 +134,11 @@ fun FriendProfile(
                             val bitmap = remember(post.contentPicture) {
                                 try {
                                     val bytes = Base64.decode(post.contentPicture, Base64.DEFAULT)
-                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                                } catch (e: Exception) { null }
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                        ?.asImageBitmap()
+                                } catch (e: Exception) {
+                                    null
+                                }
                             }
                             if (bitmap != null) {
                                 Image(
@@ -131,7 +147,6 @@ fun FriendProfile(
                                     modifier = Modifier
                                         .aspectRatio(1f)
                                         .background(Color.LightGray)
-                                        // 2. RENDIAMO L'IMMAGINE CLICCABILE
                                         .clickable { onPostClick(post.id) },
                                     contentScale = ContentScale.Crop
                                 )

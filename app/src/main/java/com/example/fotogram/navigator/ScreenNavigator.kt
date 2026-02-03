@@ -5,9 +5,9 @@ import androidx.compose.ui.Modifier
 import com.example.fotogram.navigator.loginScreen.LoginScreen
 import com.example.fotogram.navigator.feedScreen.FeedScreen
 import com.example.fotogram.navigator.newPostScreen.NewPost
-import com.example.fotogram.navigator.profileScreen.Profile
+import com.example.fotogram.navigator.profileScreen.ProfileScreen
 import com.example.fotogram.navigator.profileScreen.EditProfile
-import com.example.fotogram.navigator.friendProfile.FriendProfile
+import com.example.fotogram.navigator.friendsProfileScreen.FriendProfile
 import com.example.fotogram.navigator.detailPostScreen.DetailsPostScreen
 
 @Composable
@@ -62,13 +62,14 @@ fun ScreenNavigator(
         }
 
         "Profile" -> {
-            Profile(
+            ProfileScreen(
                 modifier = modifier,
                 onChangeScreen = { dest -> currentScreen = dest },
                 onChangeTab = { tab -> currentScreen = tab },
                 onPostClick = { postId ->
+                    // Salviamo l'ID e apriamo i dettagli, esattamente come fai per FriendProfile
                     selectedPostId = postId
-                    previousScreen = "Profile"
+                    previousScreen = "Profile" // Così se torni indietro torni al profilo
                     currentScreen = "DetailsPost"
                 }
             )
