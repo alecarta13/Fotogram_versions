@@ -24,12 +24,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.fotogram.ScreenPlaceholder
 import com.example.fotogram.SessionManager
 import com.example.fotogram.api.RetrofitClient
 import com.example.fotogram.api.UpdateImageRequest
-import com.example.fotogram.api.UserRequest
+import com.example.fotogram.api.UpdateUserRequest
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -46,11 +46,10 @@ fun LoginScreen(
     var username by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Variabili per l'immagine
+    // Immagine
     var selectedImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var base64Image by remember { mutableStateOf<String?>(null) }
 
-    // Gestore Galleria (Uguale a NewPost)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -58,10 +57,7 @@ fun LoginScreen(
             try {
                 val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
-                // Ridimensioniamo
                 selectedImageBitmap = Bitmap.createScaledBitmap(bitmap, 500, 500, true)
-
-                // Convertiamo in Base64
                 val outputStream = ByteArrayOutputStream()
                 selectedImageBitmap?.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
                 val byteArray = outputStream.toByteArray()
@@ -77,52 +73,39 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Benvenuto su Fotogram", style = MaterialTheme.typography.headlineMedium)
-
+        Text("Benvenuto su Fotogram", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- CERCHIO FOTO PROFILO ---
         Box(
             modifier = Modifier
                 .size(120.dp)
                 .clip(CircleShape)
                 .border(2.dp, Color.Gray, CircleShape)
-                .clickable { galleryLauncher.launch("image/*") }, // Clicca per cambiare
+                .clickable { galleryLauncher.launch("image/*") },
             contentAlignment = Alignment.Center
         ) {
             if (selectedImageBitmap != null) {
                 Image(
-                    bitmap = selectedImageBitmap!!.asImageBitmap(),
-                    contentDescription = "Foto scelta",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    bitmap = selectedImageBitmap!!.asImageBitmap(), contentDescription = "Foto",
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop
                 )
             } else {
-                // Icona di default se non c'è foto
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "Aggiungi foto",
-                    modifier = Modifier.size(50.dp),
-                    tint = Color.Gray
-                )
+                Icon(Icons.Default.AccountCircle, "Foto", Modifier.size(60.dp), Color.LightGray)
             }
         }
-        Text("Tocca per aggiungere una foto", color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
-
+        Text("Tocca per aggiungere foto", color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- INPUT NOME ---
         TextField(
             value = username,
             onValueChange = { if (it.length <= 15) username = it },
             label = { Text("Nome Utente") },
             modifier = Modifier.padding(16.dp),
-            enabled = !isLoading
+            enabled = !isLoading,
+            singleLine = true
         )
-
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- BOTTONE REGISTRAZIONE ---
         if (isLoading) {
             CircularProgressIndicator()
         } else {
@@ -134,37 +117,45 @@ fun LoginScreen(
                         isLoading = true
                         coroutineScope.launch {
                             try {
-                                // 1. REGISTRAZIONE UTENTE
-                                val request = UserRequest(username = username)
-                                val response = RetrofitClient.api.registerUser(request)
+                                // --- STEP 1: REGISTRAZIONE (Crea utente vuoto) ---
+                                val response = RetrofitClient.api.registerUser() // Nessun parametro!
 
                                 if (response.isSuccessful && response.body() != null) {
-                                    val token = response.body()!!.sessionId
-                                    val id = response.body()!!.userId
-                                    Log.d("LOGIN", "Registrato: $token")
+                                    val body = response.body()!!
+                                    val token = body.sessionId
+                                    val id = body.userId
 
-                                    // 2. SE HAI SCELTO UNA FOTO, CARICALA SUBITO
+                                    Log.d("LOGIN", "Utente creato. ID: $id. Ora imposto il nome...")
+
+                                    // --- STEP 2: IMPOSTO IL NOME UTENTE (Fondamentale!) ---
+                                    val updateNameReq = UpdateUserRequest(username = username, bio = "Ciao, uso Fotogram!",dateOfBirth = null)
+                                    val updateResponse = RetrofitClient.api.updateUser(token, updateNameReq)
+
+                                    if (!updateResponse.isSuccessful) {
+                                        Log.e("LOGIN", "Errore salvataggio nome: ${updateResponse.code()}")
+                                    }
+
+                                    // --- STEP 3: IMPOSTO LA FOTO (Se c'è) ---
                                     if (base64Image != null) {
                                         try {
-                                            val imageRequest = UpdateImageRequest(base64 = base64Image!!)
-                                            val imgResponse = RetrofitClient.api.uploadProfileImage(token, imageRequest)
-                                            if (!imgResponse.isSuccessful) {
-                                                Log.e("LOGIN", "Errore upload foto: ${imgResponse.code()}")
-                                            }
+                                            // Ora usiamo il campo 'base64' corretto
+                                            val imageReq = UpdateImageRequest(base64 = base64Image!!)
+                                            RetrofitClient.api.uploadProfileImage(token, imageReq)
                                         } catch (e: Exception) {
-                                            Log.e("LOGIN", "Errore crash foto: ${e.message}")
+                                            Log.e("LOGIN", "Errore foto", e)
                                         }
                                     }
 
-                                    // 3. SALVA E VAI AL FEED
+                                    // --- FINE: SALVA E ENTRA ---
                                     sessionManager.saveSession(token, id, username)
                                     onChangeScreen("Feed")
 
                                 } else {
-                                    Toast.makeText(context, "Errore Reg: ${response.code()}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Errore Creazione: ${response.code()}", Toast.LENGTH_LONG).show()
                                 }
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Errore di connessione", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Errore connessione", Toast.LENGTH_LONG).show()
+                                Log.e("LOGIN", "Crash", e)
                             } finally {
                                 isLoading = false
                             }

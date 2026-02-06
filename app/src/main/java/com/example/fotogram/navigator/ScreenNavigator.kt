@@ -1,14 +1,16 @@
 package com.example.fotogram.navigator
 
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.example.fotogram.navigator.loginScreen.LoginScreen
 import com.example.fotogram.navigator.feedScreen.FeedScreen
 import com.example.fotogram.navigator.newPostScreen.NewPost
 import com.example.fotogram.navigator.profileScreen.ProfileScreen
-import com.example.fotogram.navigator.profileScreen.EditProfile
+import com.example.fotogram.navigator.profileScreen.EditProfileScreen
 import com.example.fotogram.navigator.friendsProfileScreen.FriendProfile
 import com.example.fotogram.navigator.detailPostScreen.DetailsPostScreen
+// import com.example.fotogram.navigator.PostMapViewerScreen // Rimuovi se ti da errore, la funzione è in MapScreen.kt
 
 @Composable
 fun ScreenNavigator(
@@ -17,14 +19,26 @@ fun ScreenNavigator(
 ) {
     var currentScreen by remember { mutableStateOf(startDestination) }
 
-    // VARIABILI DI STATO
+    // Memoria Scroll Feed
+    val feedScrollState = rememberLazyListState()
+
     var selectedUserId by remember { mutableStateOf(-1) }
     var selectedPostId by remember { mutableStateOf(-1) }
 
-    // previousScreen: serve per i DettagliPost (per sapere se tornare a Feed, Profile o FriendProfile)
+    // Stati Creazione Post
+    var newPostDescription by remember { mutableStateOf("") }
+    var newPostImageBase64 by remember { mutableStateOf<String?>(null) }
+    var newPostLat by remember { mutableStateOf<Double?>(null) }
+    var newPostLng by remember { mutableStateOf<Double?>(null) }
+
+    // Dati Mappa
+    var tempMapLat by remember { mutableStateOf<Double?>(null) }
+    var tempMapLng by remember { mutableStateOf<Double?>(null) }
+
+    // Variabile che ricorda chi ha aperto il Dettaglio (Feed o Profilo)
     var previousScreen by remember { mutableStateOf("Feed") }
 
-    // NUOVA VARIABILE: Serve per ricordare da dove siamo entrati nel profilo amico (es. dal Feed)
+    // Variabile per ricordare chi ha aperto il Profilo Amico
     var friendOrigin by remember { mutableStateOf("Feed") }
 
     when (currentScreen) {
@@ -35,20 +49,29 @@ fun ScreenNavigator(
         "Feed" -> {
             FeedScreen(
                 modifier = modifier,
+                listState = feedScrollState,
                 onChangeScreen = { dest -> currentScreen = dest },
                 onChangeTab = { tab -> currentScreen = tab },
-
-                // QUANDO CLICCO UN UTENTE DAL FEED
                 onUserClick = { userId ->
                     selectedUserId = userId
-                    friendOrigin = "Feed" // <--- 1. Memorizzo che vengo dal Feed
+                    friendOrigin = "Feed"
                     currentScreen = "FriendProfile"
                 },
-
                 onPostClick = { postId ->
                     selectedPostId = postId
-                    previousScreen = "Feed"
+                    previousScreen = "Feed" // Arrivo dal Feed
                     currentScreen = "DetailsPost"
+                },
+                onMapClick = { lat, lng ->
+                    tempMapLat = lat
+                    tempMapLng = lng
+                    // Se apro la mappa dal Feed (dalla card), quando torno indietro voglio tornare al Feed
+                    previousScreen = "Feed"
+                    currentScreen = "PostMapFromFeed" // Caso speciale (opzionale) o gestito dopo
+                    // Nota: Se la mappa nel feed apre direttamente la mappa, ok.
+                    // Se intendevi aprire il dettaglio, la logica sopra è giusta.
+                    // Assumiamo che dal Feed tu apra direttamente la mappa:
+                    currentScreen = "PostMap"
                 }
             )
         }
@@ -56,9 +79,58 @@ fun ScreenNavigator(
         "NewPost" -> {
             NewPost(
                 modifier = modifier,
-                onChangeScreen = { dest -> currentScreen = dest },
-                onChangeTab = { tab -> currentScreen = tab }
+                onChangeScreen = { currentScreen = it },
+                onChangeTab = { tab -> currentScreen = tab },
+                currentDescription = newPostDescription,
+                onDescriptionChange = { newPostDescription = it },
+                currentImage = newPostImageBase64,
+                onImageChange = { newPostImageBase64 = it },
+                selectedLat = newPostLat,
+                selectedLng = newPostLng,
+                onOpenMapSelector = { currentScreen = "MapSelector" },
+                onPostSuccess = {
+                    newPostDescription = ""
+                    newPostImageBase64 = null
+                    newPostLat = null
+                    newPostLng = null
+                    currentScreen = "Feed"
+                }
             )
+        }
+
+        "MapSelector" -> {
+            MapSelectorScreen(
+                onLocationSelected = { lat, lng ->
+                    newPostLat = lat
+                    newPostLng = lng
+                    currentScreen = "NewPost"
+                },
+                onCancel = { currentScreen = "NewPost" }
+            )
+        }
+
+        "PostMap" -> {
+            // Mappa a schermo intero
+            if (tempMapLat != null && tempMapLng != null) {
+                PostMapViewerScreen(
+                    postLat = tempMapLat!!,
+                    postLng = tempMapLng!!,
+                    // CORREZIONE QUI:
+                    // Se previousScreen era "Feed" (clic diretto da card), torniamo al Feed.
+                    // Se eravamo in "DetailsPost", torniamo a "DetailsPost".
+                    // Ma aspetta: Quando apri la mappa DA DENTRO il dettaglio, non cambiamo 'previousScreen'.
+                    // Quindi dobbiamo tornare a "DetailsPost" manualmente se veniamo da lì.
+
+                    onBack = {
+                        // Se stavo guardando un dettaglio, torno al dettaglio.
+                        // Altrimenti (es. clic dalla card del feed) torno a previousScreen.
+                        // Per semplicità nel tuo flusso attuale (Mappa si apre da Dettaglio):
+                        currentScreen = "DetailsPost"
+                    }
+                )
+            } else {
+                currentScreen = "DetailsPost"
+            }
         }
 
         "Profile" -> {
@@ -67,9 +139,8 @@ fun ScreenNavigator(
                 onChangeScreen = { dest -> currentScreen = dest },
                 onChangeTab = { tab -> currentScreen = tab },
                 onPostClick = { postId ->
-                    // Salviamo l'ID e apriamo i dettagli, esattamente come fai per FriendProfile
                     selectedPostId = postId
-                    previousScreen = "Profile" // Così se torni indietro torni al profilo
+                    previousScreen = "Profile" // Arrivo dal Profilo
                     currentScreen = "DetailsPost"
                 }
             )
@@ -80,15 +151,10 @@ fun ScreenNavigator(
                 modifier = modifier,
                 userId = selectedUserId,
                 onChangeScreen = { currentScreen = it },
-
-                // <--- 2. USO LA MEMORIA SICURA
-                // Invece di 'previousScreen' (che cambia), uso 'friendOrigin' che è fisso
                 onBack = { currentScreen = friendOrigin },
-
-                // Gestione click sul post dell'amico
                 onPostClick = { postId ->
                     selectedPostId = postId
-                    previousScreen = "FriendProfile" // Dico al post di tornare qui
+                    previousScreen = "FriendProfile" // Arrivo da Profilo Amico
                     currentScreen = "DetailsPost"
                 }
             )
@@ -99,13 +165,24 @@ fun ScreenNavigator(
                 modifier = modifier,
                 postId = selectedPostId,
                 onChangeScreen = { currentScreen = it },
-                tab = previousScreen, // Torna al padre corretto (Feed, Profile o FriendProfile)
-                onChangeTab = { tab -> currentScreen = tab }
+                tab = previousScreen, // Il tasto indietro userà "Profile" o "Feed" correttamente
+                onChangeTab = { tab -> currentScreen = tab },
+
+                // CORREZIONE QUI:
+                onMapClick = { lat, lng ->
+                    tempMapLat = lat
+                    tempMapLng = lng
+
+                    // NON sovrascrivere previousScreen con "Feed"!
+                    // Lascialo com'è (es. "Profile"), così DetailPost ricorda da dove viene.
+
+                    currentScreen = "PostMap"
+                }
             )
         }
 
         "EditProfile" -> {
-            EditProfile(modifier = modifier, onChangeScreen = { currentScreen = it })
+            EditProfileScreen(modifier = modifier, onChangeScreen = { currentScreen = it })
         }
 
         else -> LoginScreen(modifier = modifier, onChangeScreen = { currentScreen = it })

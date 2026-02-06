@@ -10,8 +10,12 @@ interface PostDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPost(post: PostEntity)
 
-    @Query("SELECT * FROM posts WHERE id = :postId")
-    suspend fun getPostById(postId: Int): PostEntity?
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(posts: List<PostEntity>)
+
+    // --- QUESTA È QUELLA CHE MANCAVA ---
+    @Query("SELECT * FROM posts ORDER BY id DESC")
+    suspend fun getAllPosts(): List<PostEntity>
 
     @Query("DELETE FROM posts")
     suspend fun clearAll()

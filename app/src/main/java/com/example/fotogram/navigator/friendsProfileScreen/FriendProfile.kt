@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,19 +40,22 @@ fun FriendProfile(
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
-
-    // Usiamo lo stesso ViewModel del profilo personale
     val viewModel: ProfileViewModel = viewModel()
 
-    // 1. CORREZIONE: Usiamo i nomi nuovi del ViewModel
-    val posts by viewModel.userPosts.collectAsState() // Era .posts
-    val friendUser by viewModel.userProfile.collectAsState() // Ora prendiamo l'utente dal VM
+    val posts by viewModel.userPosts.collectAsState()
+    val friendUser by viewModel.userProfile.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isFollowing by viewModel.isFollowing.collectAsState()
+
+    // --- DATI STATISTICI ---
+    val followerCount by viewModel.followerCount.collectAsState()
+    val followingCount by viewModel.followingCount.collectAsState()
 
     LaunchedEffect(userId) {
         val token = sessionManager.fetchSession()
         if (token != null) {
-            // 2. CORREZIONE: Usiamo la funzione unica che scarica tutto (Profilo + Post)
+            // CORREZIONE: Basta chiamare loadUserProfile.
+            // Questa funzione ora scarica tutto: info, post, statistiche e stato follow.
             viewModel.loadUserProfile(userId, token)
         }
     }
@@ -61,16 +63,16 @@ fun FriendProfile(
     Column(modifier = modifier.fillMaxSize().background(Color.White)) {
         // --- HEADER ---
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 5.dp, end = 5.dp, top = 60.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Text(text = "Profilo Utente", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(text = friendUser?.username ?: "Profilo", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
 
-        // --- INFO AMICO ---
+        // --- INFO UTENTE ---
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -81,42 +83,57 @@ fun FriendProfile(
                     try {
                         val bytes = Base64.decode(friendUser!!.profilePicture, Base64.DEFAULT)
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                    } catch (e: Exception) {
-                        null
-                    }
+                    } catch (e: Exception) { null }
                 }
                 if (avatarBitmap != null) {
                     Image(
                         bitmap = avatarBitmap, contentDescription = null,
-                        modifier = Modifier.size(80.dp).clip(CircleShape)
-                            .border(1.dp, Color.Gray, CircleShape),
+                        modifier = Modifier.size(90.dp).clip(CircleShape).border(1.dp, Color.Gray, CircleShape),
                         contentScale = ContentScale.Crop
                     )
-                } else {
-                    DefaultFriendAvatar()
-                }
-            } else {
-                DefaultFriendAvatar()
-            }
+                } else DefaultFriendAvatar()
+            } else DefaultFriendAvatar()
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Nome Utente
             Text(
                 text = friendUser?.username ?: "Caricamento...",
                 fontWeight = FontWeight.Bold,
-                fontSize = 22.sp
+                fontSize = 20.sp
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Tasto Segui (Disabilitato per ora o da implementare)
-            Button(onClick = { /* TODO: Follow */ }) { Text("Segui") }
+            // --- STATISTICHE (NUMERI REALI) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                StatItem(count = posts.size.toString(), label = "Post")
+                StatItem(count = followerCount.toString(), label = "Follower")
+                StatItem(count = followingCount.toString(), label = "Seguiti")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Tasto Segui
+            val myToken = remember { sessionManager.fetchSession() }
+            Button(
+                onClick = {
+                    if (myToken != null) viewModel.toggleFollow(userId, myToken)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isFollowing) Color.Gray else MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.fillMaxWidth(0.8f)
+            ) {
+                Text(if (isFollowing) "Smetti di seguire" else "Segui")
+            }
         }
 
         HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
 
-        // --- GRIGLIA POST AMICO ---
+        // --- GRIGLIA POST ---
         Box(modifier = Modifier.weight(1f)) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -134,20 +151,13 @@ fun FriendProfile(
                             val bitmap = remember(post.contentPicture) {
                                 try {
                                     val bytes = Base64.decode(post.contentPicture, Base64.DEFAULT)
-                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                        ?.asImageBitmap()
-                                } catch (e: Exception) {
-                                    null
-                                }
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                } catch (e: Exception) { null }
                             }
                             if (bitmap != null) {
                                 Image(
-                                    bitmap = bitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .aspectRatio(1f)
-                                        .background(Color.LightGray)
-                                        .clickable { onPostClick(post.id) },
+                                    bitmap = bitmap, contentDescription = null,
+                                    modifier = Modifier.aspectRatio(1f).background(Color.LightGray).clickable { onPostClick(post.id) },
                                     contentScale = ContentScale.Crop
                                 )
                             }
@@ -160,6 +170,14 @@ fun FriendProfile(
 }
 
 @Composable
+fun StatItem(count: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = count, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(text = label, fontSize = 12.sp, color = Color.Gray)
+    }
+}
+
+@Composable
 fun DefaultFriendAvatar() {
-    Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(80.dp), tint = Color.LightGray)
+    Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(90.dp), tint = Color.LightGray)
 }

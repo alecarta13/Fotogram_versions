@@ -7,7 +7,11 @@ import androidx.room.PrimaryKey
 data class PostEntity(
     @PrimaryKey val id: Int,
     val authorId: Int,
+    val author: String?,
+    val authorProfilePicture: String?,
     val contentText: String?,
     val contentPicture: String?,
-    val createdAt: String? // Corretto: ora corrisponde al tuo PostDetail
+    val createdAt: String?,
+    val lat: Double?,
+    val lng: Double?
 )

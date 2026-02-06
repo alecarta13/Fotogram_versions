@@ -24,43 +24,89 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
-    // 1. STATO PER GLI AMICI SEGUITI (Set è più veloce di List per cercare)
     private val _followedIds = MutableStateFlow<Set<Int>>(emptySet())
     val followedIds = _followedIds.asStateFlow()
 
+    // 1. CARICAMENTO POST (Con Caching, Fix Nomi e Fix Follow)
     fun loadPosts(sessionId: String) {
+        if (_isLoading.value) return
+
         viewModelScope.launch {
-            if (_isLoading.value) return@launch
             _isLoading.value = true
-            val currentList = mutableListOf<PostDetail>()
-
             try {
-                // Scarica il Feed (Lista di ID)
+                // A. Scarica ID Bacheca
                 val feedResponse = RetrofitClient.api.getFeed(sessionId)
-                if (feedResponse.isSuccessful && feedResponse.body() != null) {
-                    val postIds = feedResponse.body()!!
-                    for (id in postIds) {
-                        // A. Cerco nel DB Locale
-                        val cachedPost = dao.getPostById(id)
 
-                        if (cachedPost != null) {
-                            currentList.add(cachedPost.toPostDetail())
-                            _posts.value = currentList.toList()
+                if (feedResponse.isSuccessful && feedResponse.body() != null) {
+                    val serverIds = feedResponse.body()!!
+
+                    // Mappa veloce per controllare la cache
+                    val cachedPostsMap = dao.getAllPosts().associateBy { it.id }
+                    val newPostsToAdd = mutableListOf<PostDetail>()
+                    val authorsToCheck = mutableSetOf<Int>()
+
+                    for (id in serverIds) {
+                        // Salta se già visibile
+                        if (_posts.value.any { it.id == id }) continue
+
+                        var post: PostDetail? = null
+
+                        // B. Cache vs Rete
+                        if (cachedPostsMap.containsKey(id)) {
+                            post = cachedPostsMap[id]!!.toPostDetail()
                         } else {
-                            // B. Scarico da Rete
                             val detailResponse = RetrofitClient.api.getPost(id, sessionId)
                             if (detailResponse.isSuccessful && detailResponse.body() != null) {
-                                val newPost = detailResponse.body()!!
-                                // C. Salvo nel DB
-                                dao.insertPost(newPost.toEntity())
-                                currentList.add(newPost)
-                                _posts.value = currentList.toList()
+                                post = detailResponse.body()!!
+                                // C. FIX "UTENTE" (Nome mancante)
+                                if (post.author.isNullOrEmpty()) {
+                                    // Scarica info autore al volo
+                                    val authorResp = RetrofitClient.api.getUser(post.authorId, sessionId)
+                                    if (authorResp.isSuccessful && authorResp.body() != null) {
+                                        val authorUser = authorResp.body()!!
+                                        post = post.copy(author = authorUser.username)
+                                    }
+                                }
+                                // Salva in DB
+                                dao.insertPost(post.toEntity())
                             }
                         }
+
+                        if (post != null) {
+                            newPostsToAdd.add(post)
+                            authorsToCheck.add(post.authorId)
+                        }
                     }
+
+                    // D. Aggiorna lista post (Paginazione)
+                    if (newPostsToAdd.isNotEmpty()) {
+                        _posts.value += newPostsToAdd
+                    }
+
+                    // E. FIX "SEGUI": Aggiorna lo stato dei follow per gli autori visti
+                    // Scarichiamo i dati utente per ogni autore unico per sapere se lo seguiamo
+                    val currentFollowed = _followedIds.value.toMutableSet()
+                    for (authorId in authorsToCheck) {
+                        // Piccola ottimizzazione: se è l'utente loggato, ignoriamo
+                        val myId = com.example.fotogram.SessionManager(getApplication()).fetchUserId()
+                        if (authorId == myId) continue
+
+                        try {
+                            val userResp = RetrofitClient.api.getUser(authorId, sessionId)
+                            if (userResp.isSuccessful && userResp.body() != null) {
+                                val user = userResp.body()!!
+                                if (user.isYourFollowing) {
+                                    currentFollowed.add(authorId)
+                                } else {
+                                    currentFollowed.remove(authorId)
+                                }
+                            }
+                        } catch (e: Exception) { /* Ignora errori rete secondari */ }
+                    }
+                    _followedIds.value = currentFollowed
                 }
             } catch (e: Exception) {
-                Log.e("FEED", "Errore: ${e.message}")
+                Log.e("FEED", "Errore feed", e)
             } finally {
                 _isLoading.value = false
             }
@@ -72,48 +118,18 @@ class FeedViewModel(application: Application) : AndroidViewModel(application) {
         loadPosts(sessionId)
     }
 
-    // --- NUOVE FUNZIONI PER GESTIRE GLI AMICI ---
-
-    // 2. SCARICA LISTA SEGUITI (Da chiamare all'avvio della schermata)
-    fun loadFollowedUsers(userId: Int, sessionId: String) {
-        viewModelScope.launch {
-            try {
-                val response = RetrofitClient.api.getFollowed(userId, sessionId)
-                if (response.isSuccessful && response.body() != null) {
-                    // Mappiamo la lista di utenti in un Set di soli ID
-                    _followedIds.value = response.body()!!.map { it.id }.toSet()
-                    Log.d("FEED", "Segui ${response.body()!!.size} utenti: ${_followedIds.value}")
-                }
-            } catch (e: Exception) {
-                Log.e("FEED", "Errore scaricamento seguiti", e)
-            }
-        }
-    }
-
-    // 3. SEGUI / SMETTI DI SEGUIRE
     fun toggleFollow(authorId: Int, sessionId: String) {
         viewModelScope.launch {
             val currentList = _followedIds.value.toMutableSet()
-
             try {
                 if (currentList.contains(authorId)) {
-                    // SE LO SEGUO GIÀ -> SMETTI DI SEGUIRE (UNFOLLOW)
                     val response = RetrofitClient.api.unfollowUser(authorId, sessionId)
-                    if (response.isSuccessful) {
-                        currentList.remove(authorId)
-                        Log.d("FEED", "Unfollowed user $authorId")
-                    }
+                    if (response.isSuccessful) currentList.remove(authorId)
                 } else {
-                    // NON LO SEGUO -> INIZIA A SEGUIRE (FOLLOW)
                     val response = RetrofitClient.api.followUser(authorId, sessionId)
-                    if (response.isSuccessful) {
-                        currentList.add(authorId)
-                        Log.d("FEED", "Followed user $authorId")
-                    }
+                    if (response.isSuccessful) currentList.add(authorId)
                 }
-                // Aggiorna lo stato per far cambiare il colore del bordo nella UI
                 _followedIds.value = currentList
-
             } catch (e: Exception) {
                 Log.e("FEED", "Errore toggle follow", e)
             }

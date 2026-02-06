@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -18,40 +19,23 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun NavigationBar(
     modifier: Modifier = Modifier,
-    page: String, // Serve per colorare l'icona giusta
-    onChangeScreen: (String) -> Unit, // Serve per logout o cambi pagina forzati
-    onChangeTab: (String) -> Unit // Serve quando clicchi le icone in basso
+    page: String,
+    onChangeScreen: (String) -> Unit,
+    onChangeTab: (String) -> Unit
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
-        color = Color.White
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icona FEED
-            NavIcon(Icons.Default.Home, isSelected = (page == "Feed")) { onChangeTab("Feed") }
-
-            // Icona NEW POST
-            NavIcon(Icons.Default.AddCircle, isSelected = (page == "NewPost")) { onChangeTab("NewPost") }
-
-            // Icona PROFILE
-            NavIcon(Icons.Default.Person, isSelected = (page == "Profile")) { onChangeTab("Profile") }
+    Surface(modifier = modifier.fillMaxWidth(), shadowElevation = 0.dp, color = Color.White) {
+        Column {
+            HorizontalDivider(thickness = 1.dp, color = Color(0xFFF0F0F0))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 30.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                NavIcon(Icons.Default.Home, (page == "Feed")) { onChangeTab("Feed") }
+                NavIcon(Icons.Default.AddCircle, (page == "NewPost")) { onChangeTab("NewPost") }
+                NavIcon(Icons.Default.Person, (page == "Profile")) { onChangeTab("Profile") }
+            }
         }
     }
 }
-
-@Composable
-fun NavIcon(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (isSelected) Color.Black else Color.LightGray,
-            modifier = Modifier.size(32.dp)
-        )
-    }
-}
+@Composable fun NavIcon(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) { IconButton(onClick) { Icon(icon, null, tint = if (isSelected) Color.Black else Color.LightGray, modifier = Modifier.size(28.dp)) } }

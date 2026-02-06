@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Fotogram</string>
+    <string name="mapbox_access_token">pk.eyJ1IjoiYWxlY2FydGEiLCJhIjoiY21pZXV2ODZiMDVheDNsc2c4am0zeDRiYiJ9.bsgzSVfccf5ycWFcZodBIw</string>
 </resources>

@@ -10,56 +10,63 @@ import retrofit2.http.PUT
 import retrofit2.http.Path
 
 interface FotogramApi {
-    // Crea un nuovo utente
-    @POST("user")
-    suspend fun registerUser(@Body request: UserRequest): Response<UserResponse>
 
+    // 1. REGISTRAZIONE: Swagger dice "No parameters", quindi mandiamo una mappa vuota
+    @POST("user")
+    suspend fun registerUser(@Body empty: Map<String, String> = emptyMap()): Response<UserResponse>
+
+    // 2. RECUPERO UTENTE
     @GET("user/{userId}")
     suspend fun getUser(
         @Path("userId") userId: Int,
         @Header("x-session-id") sessionId: String
     ): Response<User>
 
-    // Scarica la lista ID dei post dell'utente loggato
+    // 3. FEED
     @GET("feed")
     suspend fun getFeed(@Header("x-session-id") sessionId: String): Response<List<Int>>
 
-    // Scarica i dettagli di un post
     @GET("post/{postId}")
     suspend fun getPost(
         @Path("postId") postId: Int,
         @Header("x-session-id") sessionId: String
     ): Response<PostDetail>
 
-    // CREA UN NUOVO POST
     @POST("post")
     suspend fun createPost(
         @Header("x-session-id") sessionId: String,
         @Body request: CreatePostRequest
-    ): Response<PostDetail> // Il server ci risponde con il post appena creato
+    ): Response<PostDetail>
 
+    // 4. UPLOAD FOTO (Campo 'base64')
     @PUT("user/image")
     suspend fun uploadProfileImage(
         @Header("x-session-id") sessionId: String,
         @Body request: UpdateImageRequest
-    ): Response<Any> // Mettiamo Any perché spesso risponde vuoto o con messaggio
+    ): Response<Any>
 
-    //Scarica la lista ID dei post di un utente
+    // 5. AGGIORNAMENTO NOME (Fondamentale dopo la registrazione)
+    @PUT("user")
+    suspend fun updateUser(
+        @Header("x-session-id") sessionId: String,
+        @Body request: UpdateUserRequest
+    ): Response<User>
+
     @GET("post/list/{authorId}")
     suspend fun getUserPosts(
         @Path("authorId") userId: Int,
         @Header("x-session-id") sessionId: String
     ): Response<List<Int>>
 
+    @PUT("follow/{targetId}")
+    suspend fun followUser(
+        @Path("targetId") id: Int,
+        @Header("x-session-id") sessionId: String
+    ): Response<User>
 
-    @PUT("users/{id}/follow")
-    suspend fun followUser(@Path("id") id: Int, @Header("x-session-id") sessionId: String): Response<User>
-
-    @DELETE("users/{id}/follow")
-    suspend fun unfollowUser(@Path("id") id: Int, @Header("x-session-id") sessionId: String): Response<User> // A volte ritorna Void o User
-
-    // Spesso c'è una chiamata per vedere chi segui, es:
-    @GET("users/{id}/followed")
-    suspend fun getFollowed(@Path("id") id: Int, @Header("x-session-id") sessionId: String): Response<List<User>>
+    @DELETE("follow/{targetId}")
+    suspend fun unfollowUser(
+        @Path("targetId") id: Int,
+        @Header("x-session-id") sessionId: String
+    ): Response<User>
 }
-
